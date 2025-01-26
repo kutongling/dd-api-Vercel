@@ -11,8 +11,8 @@ app.use(cors());
 
 // API配置
 const API_BASE = 'https://api.dandanplay.net';
-const appId = process.env.DANDAN_APP_ID || 's8zi9cvbw9';
-const appSecret = process.env.DANDAN_APP_SECRET || '24QkxXdVGF4k3RIVPHDNIbsUY4GYPtxF';
+const appId = process.env.DANDAN_APP_ID;
+const appSecret = process.env.DANDAN_APP_SECRET;
 
 // 生成签名
 function generateSignature(appId, timestamp, path, appSecret) {
