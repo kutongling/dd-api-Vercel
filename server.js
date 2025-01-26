@@ -6,47 +6,40 @@ const { URL } = require('url');
 
 const app = express();
 
-// 增强的CORS配置
+// 配置CORS选项
 const corsOptions = {
-    origin: true, // 允许所有来源
-    methods: ['GET', 'POST', 'OPTIONS', 'HEAD'],
-    allowedHeaders: [
-        'Content-Type',
-        'X-AppId',
-        'X-Timestamp',
-        'X-Signature',
-        'Accept',
-        'Origin',
-        'Authorization',
-        'X-Requested-With'
-    ],
-    exposedHeaders: ['Content-Length', 'Content-Type'],
-    credentials: true,
-    maxAge: 86400 // 预检请求缓存24小时
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-AppId', 'X-Timestamp', 'X-Signature', 'Accept'],
+    credentials: true
 };
 
-// 使用增强的CORS配置
+// 启用CORS，使用配置选项
 app.use(cors(corsOptions));
 
-// 错误处理中间件
-app.use((err, req, res, next) => {
-    console.error('服务器错误:', err);
-    res.status(500).json({
-        success: false,
-        errorCode: 500,
-        errorMessage: '服务器内部错误'
-    });
-});
+// 添加预检请求处理
+app.options('*', cors(corsOptions));
+
+// API配置
+const API_BASE = 'https://api.dandanplay.net';
+const appId = process.env.DANDAN_APP_ID;
+const appSecret = process.env.DANDAN_APP_SECRET;
+
+// 生成签名
+function generateSignature(appId, timestamp, path, appSecret) {
+    const data = `${appId}${timestamp}${path}${appSecret}`;
+    return crypto.createHash('sha256')
+                .update(data, 'utf8')
+                .digest('base64');
+}
 
 // 通用路由 - 处理所有请求
 app.get('*', async (req, res) => {
     try {
-        // 设置增强的响应头
+        // 设置额外的响应头
         res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
-        res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(', '));
-        res.header('Access-Control-Expose-Headers', corsOptions.exposedHeaders.join(', '));
-        res.header('Access-Control-Max-Age', corsOptions.maxAge);
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, X-AppId, X-Timestamp, X-Signature, Accept');
         res.header('Access-Control-Allow-Credentials', 'true');
 
         let apiPath;
@@ -99,19 +92,18 @@ app.get('*', async (req, res) => {
             }
         });
 
-        // 修改响应发送
         return res.set({
             'Content-Type': 'application/json;charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            'Cache-Control': 'no-cache'
         }).json(response.data);
 
     } catch (error) {
-        console.error('API错误:', error);
-        
-        // 确保错误响应也包含正确的CORS头
-        res.header('Access-Control-Allow-Origin', '*');
+        console.error('API错误:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+
         res.status(error.response?.status || 500).json({
             success: false,
             errorCode: error.response?.status || 500,
