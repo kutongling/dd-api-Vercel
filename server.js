@@ -6,30 +6,24 @@ const { URL } = require('url');
 
 const app = express();
 
-// 配置CORS选项
+// 简化 CORS 配置，专注于基本功能
 const corsOptions = {
-    origin: '*', // 允许所有域名访问，生产环境建议配置具体的域名
-    methods: ['GET', 'POST', 'OPTIONS', 'HEAD', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: [
-        'Content-Type',
-        'X-AppId',
-        'X-Timestamp',
-        'X-Signature',
-        'Accept',
-        'Origin',
-        'Authorization',
-        'X-Requested-With'
-    ],
-    exposedHeaders: ['Content-Length', 'Content-Type'],
-    credentials: true,
-    optionsSuccessStatus: 204 // 对于一些旧的浏览器，默认204
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+    allowedHeaders: ['Content-Type', 'Origin', 'Accept'],
+    credentials: false  // 移动端通常不需要凭证
 };
 
-// 使用增强的CORS配置
+// 基础中间件
 app.use(cors(corsOptions));
+app.use(express.json());
 
-// 添加预检请求处理
-app.options('*', cors(corsOptions));
+// 添加简单的健康检查端点
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
 
 // API配置
 const API_BASE = 'https://api.dandanplay.net';
@@ -44,34 +38,29 @@ function generateSignature(appId, timestamp, path, appSecret) {
                 .digest('base64');
 }
 
-// 通用路由 - 处理所有请求
+// 通用路由处理
 app.get('*', async (req, res) => {
     try {
-        // 设置增强的响应头
+        // 简化响应头设置
         res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD, PUT, PATCH, DELETE');
-        res.header('Access-Control-Allow-Headers', corsOptions.allowedHeaders.join(', '));
-        res.header('Access-Control-Expose-Headers', corsOptions.exposedHeaders.join(', '));
-        res.header('Access-Control-Max-Age', corsOptions.maxAge);
-        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET');
+        res.header('Content-Type', 'application/json;charset=utf-8');
+        res.header('Cache-Control', 'no-cache');
 
         let apiPath;
         let targetUrl;
         let params = {};
 
-        // 解析请求URL
-        const fullUrl = req.url.slice(1); // 移除开头的 /
+        // 简化 URL 处理
+        const fullUrl = req.url.slice(1);
         if (fullUrl.startsWith('http')) {
-            // 完整URL格式
             const urlObj = new URL(fullUrl);
             apiPath = urlObj.pathname;
             targetUrl = `${API_BASE}${apiPath}`;
-            // 获取查询参数
             urlObj.searchParams.forEach((value, key) => {
                 params[key] = value;
             });
         } else {
-            // 相对路径格式
             apiPath = req.path;
             targetUrl = `${API_BASE}${apiPath}`;
             params = req.query;
@@ -80,19 +69,10 @@ app.get('*', async (req, res) => {
         // 规范化路径
         apiPath = apiPath.replace(/\/+/g, '/');
 
-        // 生成签名
         const timestamp = Math.floor(Date.now() / 1000);
         const signature = generateSignature(appId, timestamp, apiPath, appSecret);
 
-        console.log('请求信息:', {
-            原始URL: fullUrl,
-            API路径: apiPath,
-            目标URL: targetUrl,
-            参数: params,
-            时间戳: timestamp
-        });
-
-        // 发送请求
+        // 添加重试逻辑
         const response = await axios({
             method: 'get',
             url: targetUrl,
@@ -101,26 +81,29 @@ app.get('*', async (req, res) => {
                 'X-AppId': appId,
                 'X-Timestamp': timestamp.toString(),
                 'X-Signature': signature,
-                'Accept': 'application/json'
-            }
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0'  // 添加通用 User-Agent
+            },
+            timeout: 10000,  // 10秒超时
+            validateStatus: status => status < 500  // 允许非500错误
         });
 
-        return res.set({
-            'Content-Type': 'application/json;charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-        }).json(response.data);
+        return res.json(response.data);
 
     } catch (error) {
-        console.error('API错误:', error);
-        
-        // 确保错误响应也包含正确的CORS头
-        res.header('Access-Control-Allow-Origin', '*');
+        // 改进错误处理
+        console.error('请求失败:', {
+            error: error.message,
+            url: req.url,
+            status: error.response?.status,
+            data: error.response?.data
+        });
+
+        // 返回友好的错误信息
         res.status(error.response?.status || 500).json({
             success: false,
             errorCode: error.response?.status || 500,
-            errorMessage: error.response?.data?.errorMessage || error.message
+            errorMessage: '请求失败，请稍后重试'
         });
     }
 });
