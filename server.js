@@ -6,8 +6,19 @@ const { URL } = require('url');
 
 const app = express();
 
-// 启用CORS
-app.use(cors());
+// 配置CORS选项
+const corsOptions = {
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-AppId', 'X-Timestamp', 'X-Signature', 'Accept'],
+    credentials: true
+};
+
+// 启用CORS，使用配置选项
+app.use(cors(corsOptions));
+
+// 添加预检请求处理
+app.options('*', cors(corsOptions));
 
 // API配置
 const API_BASE = 'https://api.dandanplay.net';
@@ -25,6 +36,12 @@ function generateSignature(appId, timestamp, path, appSecret) {
 // 通用路由 - 处理所有请求
 app.get('*', async (req, res) => {
     try {
+        // 设置额外的响应头
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, X-AppId, X-Timestamp, X-Signature, Accept');
+        res.header('Access-Control-Allow-Credentials', 'true');
+
         let apiPath;
         let targetUrl;
         let params = {};
@@ -75,7 +92,10 @@ app.get('*', async (req, res) => {
             }
         });
 
-        res.json(response.data);
+        return res.set({
+            'Content-Type': 'application/json;charset=utf-8',
+            'Cache-Control': 'no-cache'
+        }).json(response.data);
 
     } catch (error) {
         console.error('API错误:', {
