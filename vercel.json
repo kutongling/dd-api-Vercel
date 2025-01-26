@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ],
+  "env": {
+    "DANDAN_APP_ID": "s8zi9cvbw9",
+    "DANDAN_APP_SECRET": "24QkxXdVGF4k3RIVPHDNIbsUY4GYPtxF"
+  }
+}

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>弹弹play API 测试</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>弹弹play API 测试</h1>
+    <form id="searchForm">
+        <input type="text" id="anime" placeholder="动画名称（必填）" required>
+        <input type="text" id="episode" placeholder="剧集编号（选填）">
+        <button type="submit">搜索</button>
+    </form>
+    <pre id="result"></pre>
+
+    <script>
+        document.getElementById('searchForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const anime = document.getElementById('anime').value.trim();
+            const episode = document.getElementById('episode').value.trim();
+            
+            try {
+                const params = new URLSearchParams({ anime });
+                if (episode) params.append('episode', episode);
+                
+                const response = await fetch(`/api/search?${params}`);
+                const data = await response.json();
+                document.getElementById('result').textContent = 
+                    JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('result').textContent = 
+                    `请求失败: ${error.message}`;
+            }
+        };
+    </script>
+</body>
+</html>
