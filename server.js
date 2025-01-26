@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const crypto = require('crypto');
 const cors = require('cors');
+const { URL } = require('url');
 
 const app = express();
 
@@ -21,36 +22,71 @@ function generateSignature(appId, timestamp, path, appSecret) {
                 .digest('base64');
 }
 
-// API路由
-app.get('/api/:path(*)', async (req, res) => {
+// 通用路由 - 处理所有请求
+app.get('*', async (req, res) => {
     try {
-        const apiPath = '/' + req.params.path;
+        let apiPath;
+        let targetUrl;
+        let params = {};
+
+        // 解析请求URL
+        const fullUrl = req.url.slice(1); // 移除开头的 /
+        if (fullUrl.startsWith('http')) {
+            // 完整URL格式
+            const urlObj = new URL(fullUrl);
+            apiPath = urlObj.pathname;
+            targetUrl = `${API_BASE}${apiPath}`;
+            // 获取查询参数
+            urlObj.searchParams.forEach((value, key) => {
+                params[key] = value;
+            });
+        } else {
+            // 相对路径格式
+            apiPath = req.path;
+            targetUrl = `${API_BASE}${apiPath}`;
+            params = req.query;
+        }
+
+        // 规范化路径
+        apiPath = apiPath.replace(/\/+/g, '/');
+
+        // 生成签名
         const timestamp = Math.floor(Date.now() / 1000);
         const signature = generateSignature(appId, timestamp, apiPath, appSecret);
 
-        // 构建请求URL和参数
-        const targetUrl = `${API_BASE}${apiPath}`;
-        const headers = {
-            'X-AppId': appId,
-            'X-Timestamp': timestamp.toString(),
-            'X-Signature': signature,
-            'Accept': 'application/json'
-        };
+        console.log('请求信息:', {
+            原始URL: fullUrl,
+            API路径: apiPath,
+            目标URL: targetUrl,
+            参数: params,
+            时间戳: timestamp
+        });
 
-        // 转发请求
+        // 发送请求
         const response = await axios({
             method: 'get',
             url: targetUrl,
-            params: req.query,
-            headers: headers
+            params: params,
+            headers: {
+                'X-AppId': appId,
+                'X-Timestamp': timestamp.toString(),
+                'X-Signature': signature,
+                'Accept': 'application/json'
+            }
         });
 
         res.json(response.data);
+
     } catch (error) {
-        console.error('API错误:', error.response?.data || error.message);
+        console.error('API错误:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+
         res.status(error.response?.status || 500).json({
             success: false,
-            errorCode: error.response?.status,
+            errorCode: error.response?.status || 500,
             errorMessage: error.response?.data?.errorMessage || error.message
         });
     }
