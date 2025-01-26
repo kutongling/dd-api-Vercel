@@ -6,29 +6,13 @@ const { URL } = require('url');
 
 const app = express();
 
-// 简化 CORS 配置，专注于基本功能
-const corsOptions = {
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-    allowedHeaders: ['Content-Type', 'Origin', 'Accept'],
-    credentials: false  // 移动端通常不需要凭证
-};
-
-// 基础中间件
-app.use(cors(corsOptions));
-app.use(express.json());
-
-// 添加简单的健康检查端点
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
-});
+// 启用CORS
+app.use(cors());
 
 // API配置
 const API_BASE = 'https://api.dandanplay.net';
-const appId = process.env.DANDAN_APP_ID || 's8zi9cvbw9';
-const appSecret = process.env.DANDAN_APP_SECRET || '24QkxXdVGF4k3RIVPHDNIbsUY4GYPtxF';
+const appId = process.env.DANDAN_APP_ID;
+const appSecret = process.env.DANDAN_APP_SECRET;
 
 // 生成签名
 function generateSignature(appId, timestamp, path, appSecret) {
@@ -38,29 +22,26 @@ function generateSignature(appId, timestamp, path, appSecret) {
                 .digest('base64');
 }
 
-// 通用路由处理
+// 通用路由 - 处理所有请求
 app.get('*', async (req, res) => {
     try {
-        // 简化响应头设置
-        res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Content-Type', 'application/json;charset=utf-8');
-        res.header('Cache-Control', 'no-cache');
-
         let apiPath;
         let targetUrl;
         let params = {};
 
-        // 简化 URL 处理
-        const fullUrl = req.url.slice(1);
+        // 解析请求URL
+        const fullUrl = req.url.slice(1); // 移除开头的 /
         if (fullUrl.startsWith('http')) {
+            // 完整URL格式
             const urlObj = new URL(fullUrl);
             apiPath = urlObj.pathname;
             targetUrl = `${API_BASE}${apiPath}`;
+            // 获取查询参数
             urlObj.searchParams.forEach((value, key) => {
                 params[key] = value;
             });
         } else {
+            // 相对路径格式
             apiPath = req.path;
             targetUrl = `${API_BASE}${apiPath}`;
             params = req.query;
@@ -69,10 +50,19 @@ app.get('*', async (req, res) => {
         // 规范化路径
         apiPath = apiPath.replace(/\/+/g, '/');
 
+        // 生成签名
         const timestamp = Math.floor(Date.now() / 1000);
         const signature = generateSignature(appId, timestamp, apiPath, appSecret);
 
-        // 添加重试逻辑
+        console.log('请求信息:', {
+            原始URL: fullUrl,
+            API路径: apiPath,
+            目标URL: targetUrl,
+            参数: params,
+            时间戳: timestamp
+        });
+
+        // 发送请求
         const response = await axios({
             method: 'get',
             url: targetUrl,
@@ -81,41 +71,25 @@ app.get('*', async (req, res) => {
                 'X-AppId': appId,
                 'X-Timestamp': timestamp.toString(),
                 'X-Signature': signature,
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0'  // 添加通用 User-Agent
-            },
-            timeout: 10000,  // 10秒超时
-            validateStatus: status => status < 500  // 允许非500错误
+                'Accept': 'application/json'
+            }
         });
 
-        return res.json(response.data);
+        res.json(response.data);
 
     } catch (error) {
-        // 改进错误处理
-        console.error('请求失败:', {
-            error: error.message,
-            url: req.url,
-            status: error.response?.status,
-            data: error.response?.data
+        console.error('API错误:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
         });
 
-        // 返回友好的错误信息
         res.status(error.response?.status || 500).json({
             success: false,
             errorCode: error.response?.status || 500,
-            errorMessage: '请求失败，请稍后重试'
+            errorMessage: error.response?.data?.errorMessage || error.message
         });
     }
-});
-
-// 错误处理中间件
-app.use((err, req, res, next) => {
-    console.error('服务器错误:', err);
-    res.status(500).json({
-        success: false,
-        errorCode: 500,
-        errorMessage: '服务器内部错误'
-    });
 });
 
 // 如果不在Vercel环境中，启动本地服务器
