@@ -77,8 +77,8 @@ MIT License
 
 ## 🔗 相关项目
 
-- [Emby弹幕插件]()
-- [弹弹play]()
+- [Emby弹幕插件](https://github.com/kutongling/dd-danmaku)
+- [弹弹play](https://www.dandanplay.com/)
 
 ## 💖 致谢
 
