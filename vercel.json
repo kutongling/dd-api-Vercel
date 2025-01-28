@@ -13,7 +13,7 @@
     }
   ],
   "env": {
-    "DANDAN_APP_ID": "s8zi9cvbw9",
-    "DANDAN_APP_SECRET": "24QkxXdVGF4k3RIVPHDNIbsUY4GYPtxF"
+    "DANDAN_APP_ID": "",
+    "DANDAN_APP_SECRET": ""
   }
 }
